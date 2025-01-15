@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.5)
 
-project("KTAify-STOPAPP")
+project("KTASTOPAPP")
 
 find_package(cxx REQUIRED CONFIG)
 
