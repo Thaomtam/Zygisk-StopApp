@@ -1,0 +1,2 @@
+allow untrusted_app untrusted_app process execmem;
+allow untrusted_app untrusted_app file { read open getattr };
