@@ -46,8 +46,8 @@ android {
                 )
 
                 cppFlags(
-                    "-std=gnu++26",
-                    "-fno-exceptions",
+                    "-std=gnu++20",
+                    "-exceptions",
                     "-fno-rtti",
                     "-fvisibility=hidden",
                     "-fvisibility-inlines-hidden"
