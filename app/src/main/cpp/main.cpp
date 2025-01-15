@@ -17,7 +17,7 @@ using json = nlohmann::json;
 
 // Biến toàn cục
 void *original_get_recent_tasks = nullptr;
-std::unordered_set<std::string> lastRecentTasks; // Lưu danh sách app gần đây
+std::unordered_set<std::string> lastRecentTasks;
 
 // Hàm load JSON array từ file
 std::vector<std::string> loadJsonArray(const std::string &filePath) {
@@ -41,95 +41,123 @@ bool shouldForceStop(const std::string &packageName) {
     std::vector<std::string> blacklist = loadJsonArray("/data/adb/modules/KTAify-STOPAPP/blacklist.json");
     std::vector<std::string> whitelist = loadJsonArray("/data/adb/modules/KTAify-STOPAPP/whitelist.json");
 
-    // Nếu ứng dụng nằm trong whitelist, không dừng
     if (std::find(whitelist.begin(), whitelist.end(), packageName) != whitelist.end()) {
         return false;
     }
-
-    // Nếu ứng dụng nằm trong blacklist, dừng
     return std::find(blacklist.begin(), blacklist.end(), packageName) != blacklist.end();
 }
 
-// Thực hiện force-stop ứng dụng
-void forceStopApp(const std::string &packageName) {
-    std::string command = "su -c \"am force-stop --user 0 " + packageName + "\"";
-    system(command.c_str());
+// Thực hiện force-stop ứng dụng bằng JNI
+void forceStopApp(JNIEnv *env, const std::string &packageName) {
+    jclass contextClass = env->FindClass("android/content/Context");
+    if (!contextClass) {
+        LOGE("Failed to find Context class");
+        return;
+    }
+
+    jclass activityManagerClass = env->FindClass("android/app/ActivityManager");
+    if (!activityManagerClass) {
+        LOGE("Failed to find ActivityManager class");
+        env->DeleteLocalRef(contextClass);
+        return;
+    }
+
+    jfieldID activityServiceField = env->GetStaticFieldID(contextClass, "ACTIVITY_SERVICE", "Ljava/lang/String;");
+    if (!activityServiceField) {
+        LOGE("Failed to find ACTIVITY_SERVICE field");
+        env->DeleteLocalRef(contextClass);
+        env->DeleteLocalRef(activityManagerClass);
+        return;
+    }
+
+    jstring activityService = (jstring)env->GetStaticObjectField(contextClass, activityServiceField);
+    jmethodID getSystemServiceMethod = env->GetMethodID(contextClass, "getSystemService", "(Ljava/lang/String;)Ljava/lang/Object;");
+    if (!getSystemServiceMethod) {
+        LOGE("Failed to find getSystemService method");
+        env->DeleteLocalRef(contextClass);
+        env->DeleteLocalRef(activityManagerClass);
+        env->DeleteLocalRef(activityService);
+        return;
+    }
+
+    jobject activityManager = env->CallObjectMethod(env->NewGlobalRef(contextClass), getSystemServiceMethod, activityService);
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        LOGE("Exception occurred while calling getSystemService");
+        env->DeleteLocalRef(contextClass);
+        env->DeleteLocalRef(activityManagerClass);
+        env->DeleteLocalRef(activityService);
+        return;
+    }
+
+    jmethodID forceStopPackageMethod = env->GetMethodID(activityManagerClass, "forceStopPackage", "(Ljava/lang/String;)V");
+    if (!forceStopPackageMethod) {
+        LOGE("Failed to find forceStopPackage method");
+        env->DeleteLocalRef(contextClass);
+        env->DeleteLocalRef(activityManagerClass);
+        env->DeleteLocalRef(activityService);
+        env->DeleteLocalRef(activityManager);
+        return;
+    }
+
+    jstring packageNameJString = env->NewStringUTF(packageName.c_str());
+    env->CallVoidMethod(activityManager, forceStopPackageMethod, packageNameJString);
+
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        LOGE("Exception occurred while calling forceStopPackage");
+    }
+
+    // Giải phóng tham chiếu JNI
+    env->DeleteLocalRef(contextClass);
+    env->DeleteLocalRef(activityManagerClass);
+    env->DeleteLocalRef(activityService);
+    env->DeleteLocalRef(activityManager);
+    env->DeleteLocalRef(packageNameJString);
+
     LOGI("Force-stopped app: %s", packageName.c_str());
 }
 
-// Hàm hook vào `getRecentTasks`
+// Hàm hook vào getRecentTasks
 void *hooked_get_recent_tasks(JNIEnv *env, jobject thiz, jint maxNum) {
     LOGI("Hooked getRecentTasks() called");
 
-    // Gọi hàm gốc
     void *result = ((decltype(&hooked_get_recent_tasks))original_get_recent_tasks)(env, thiz, maxNum);
 
-    // Lấy danh sách các ứng dụng hiện tại
     std::unordered_set<std::string> currentRecentTasks;
     jobjectArray recentTasks = (jobjectArray)result;
     jsize taskCount = env->GetArrayLength(recentTasks);
-    LOGI("Found %d recent tasks", taskCount);
 
     for (int i = 0; i < taskCount; ++i) {
         jobject taskInfo = env->GetObjectArrayElement(recentTasks, i);
-        if (!taskInfo) {
-            LOGE("Failed to get taskInfo at index %d", i);
-            continue;
-        }
-
         jclass taskInfoClass = env->GetObjectClass(taskInfo);
-        if (!taskInfoClass) {
-            LOGE("Failed to get taskInfo class");
-            env->DeleteLocalRef(taskInfo);
-            continue;
-        }
-
         jmethodID getPackageName = env->GetMethodID(taskInfoClass, "getPackageName", "()Ljava/lang/String;");
-        if (!getPackageName) {
-            LOGE("Failed to find method getPackageName");
-            env->DeleteLocalRef(taskInfoClass);
-            env->DeleteLocalRef(taskInfo);
-            continue;
-        }
-
         jstring packageName = (jstring)env->CallObjectMethod(taskInfo, getPackageName);
-        if (env->ExceptionCheck()) {
-            env->ExceptionClear();
-            LOGE("Exception occurred while calling getPackageName");
-            env->DeleteLocalRef(taskInfoClass);
-            env->DeleteLocalRef(taskInfo);
-            continue;
-        }
 
         const char *packageCStr = env->GetStringUTFChars(packageName, nullptr);
         if (packageCStr) {
             currentRecentTasks.insert(packageCStr);
             env->ReleaseStringUTFChars(packageName, packageCStr);
         }
-
-        // Giải phóng tham chiếu cục bộ
         env->DeleteLocalRef(packageName);
         env->DeleteLocalRef(taskInfoClass);
         env->DeleteLocalRef(taskInfo);
     }
 
-    // Phát hiện ứng dụng bị thoát (có trong danh sách cũ nhưng không còn trong danh sách mới)
     for (const auto &app : lastRecentTasks) {
         if (currentRecentTasks.find(app) == currentRecentTasks.end()) {
-            LOGI("App removed from recent tasks: %s", app.c_str());
             if (shouldForceStop(app)) {
-                forceStopApp(app); // Buộc dừng nếu ứng dụng trong blacklist
+                forceStopApp(env, app);
             }
         }
     }
 
-    // Cập nhật danh sách ứng dụng hiện tại
     lastRecentTasks = currentRecentTasks;
 
     return result;
 }
 
-// Cài đặt Shadowhook
+// Cài đặt hook
 void install_hooks() {
     original_get_recent_tasks = shadowhook_hook_sym_name(
         "libandroid_runtime.so",
@@ -137,8 +165,7 @@ void install_hooks() {
         (void *)hooked_get_recent_tasks,
         (void **)&original_get_recent_tasks
     );
-
-    if (original_get_recent_tasks == nullptr) {
+    if (!original_get_recent_tasks) {
         LOGE("Failed to hook getRecentTasks");
     } else {
         LOGI("Successfully hooked getRecentTasks");
@@ -150,7 +177,7 @@ class KTASTOPAPP : public zygisk::ModuleBase {
 public:
     void onLoad(zygisk::Api *api, JNIEnv *env) override {
         LOGI("Zygisk module loaded");
-        install_hooks(); // Cài đặt hook
+        install_hooks();
     }
 
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
