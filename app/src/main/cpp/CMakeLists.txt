@@ -20,9 +20,7 @@ file(GLOB SHADOWHOOK_SRC
 )
 
 add_library(${CMAKE_PROJECT_NAME} SHARED
-        hook.cpp
-		utils.cpp
-		zygisk.cpp
+        main.cpp
         ${SHADOWHOOK_SRC}
 )
 
