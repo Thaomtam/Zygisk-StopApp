@@ -23,7 +23,8 @@ std::unordered_set<std::string> lastRecentTasks;
 std::vector<std::string> loadJsonArray(const std::string &filePath) {
     std::ifstream file(filePath);
     if (!file.is_open()) {
-        throw std::runtime_error("Could not open file: " + filePath);
+        LOGE("Could not open file: %s", filePath.c_str());
+        return {}; // Trả về danh sách rỗng nếu không mở được file
     }
 
     json root;
