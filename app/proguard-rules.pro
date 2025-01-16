@@ -1,4 +1,0 @@
--dontobfuscate
--dontwarn *
--keep class es.thoitiet.KTAify.EntryPoint {public <methods>;}
--keep class org.lsposed.hiddenapibypass.** { *; }
