@@ -3,7 +3,7 @@ include_directories(${CMAKE_SOURCE_DIR}/external)
 cmake_minimum_required(VERSION 3.22.1)
 
 # Đặt tên dự án
-project(KTAify)
+project(KTASTOPAPP)
 
 # Sử dụng chuẩn C++23
 set(CMAKE_CXX_STANDARD 23)
@@ -34,26 +34,24 @@ if (CMAKE_BUILD_TYPE STREQUAL "Release")
 endif ()
 set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${LINKER_FLAGS}")
 
-# Thêm thư viện chính cho module KTAify
-add_library(KTAify SHARED
-            KTAify.cpp
-            module.h
-            embedded_config.h)
+# Thêm thư viện chính cho module KTASTOPAPP
+add_library(KTASTOPAPP SHARED
+            main.cpp)
 
 # Liên kết thư viện Android log
-target_link_libraries(KTAify log)
+target_link_libraries(KTASTOPAPP log)
 
 # Strip symbols trong chế độ Release
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
-    add_custom_command(TARGET KTAify POST_BUILD
-            COMMAND ${CMAKE_STRIP} --strip-all --remove-section=.comment "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libKTAify.so"
-            COMMENT "Stripping symbols from KTAify")
+    add_custom_command(TARGET KTASTOPAPP POST_BUILD
+            COMMAND ${CMAKE_STRIP} --strip-all --remove-section=.comment "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libKTASTOPAPP.so"
+            COMMENT "Stripping symbols from KTASTOPAPP")
 endif ()
 
 # Hỗ trợ armeabi-v7a và arm64-v8a
-set_target_properties(KTAify PROPERTIES
-    OUTPUT_NAME "KTAify"
+set_target_properties(KTASTOPAPP PROPERTIES
+    OUTPUT_NAME "KTASTOPAPP"
     ANDROID_ABI "arm64-v8a;armeabi-v7a"
 )
-# Bật exceptions riêng cho KTAify.cpp
-set_source_files_properties(${CMAKE_SOURCE_DIR}/KTAify.cpp PROPERTIES COMPILE_FLAGS "-fexceptions")
+# Bật exceptions riêng cho main.cpp
+set_source_files_properties(${CMAKE_SOURCE_DIR}/main.cpp PROPERTIES COMPILE_FLAGS "-fexceptions")
