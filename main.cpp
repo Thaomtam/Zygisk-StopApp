@@ -9,6 +9,7 @@
 #include <cstring>
 #include <vector>
 #include <string>
+#include <fstream>
 #include <string_view>
 #include <filesystem>
 #include <unordered_map>
@@ -44,8 +45,8 @@ public:
         for (const auto &pkg : appConfigs) {
             if (std::find(recentTasks.begin(), recentTasks.end(), pkg) == recentTasks.end()) {
                 // Nếu packageName không có trong danh sách gần đây => buộc dừng
-                LOGD("Forcing stop for package: %s", pkg.c_str());
-                forceStopApp(pkg);
+                LOGD("Forcing stop for package: %s", pkg.first.c_str());
+                forceStopApp(pkg.first);
             }
         }
     }
