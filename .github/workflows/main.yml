@@ -1,0 +1,98 @@
+name: Build KTASTOPAPP
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Clone repository
+      - name: Checkout source code
+        uses: actions/checkout@v3
+
+      # Setup Python for processing YAML
+      - name: Setup Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.x'
+
+      # Install dependencies for Python
+      - name: Install Python dependencies
+        run: |
+          pip install pyyaml
+
+      # Cache Android NDK
+      - name: Cache Android NDK
+        uses: actions/cache@v3
+        with:
+          path: $HOME/android-ndk-r27c
+          key: ndk-cache-${{ runner.os }}-r27c
+          restore-keys: |
+            ndk-cache-${{ runner.os }}-
+
+      # Setup Android NDK
+      - name: Setup Android NDK
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake unzip
+          wget https://github.com/ninja-build/ninja/releases/download/v1.12.1/ninja-linux.zip
+          unzip ninja-linux.zip -d /usr/local/bin/
+          wget https://dl.google.com/android/repository/android-ndk-r27c-linux.zip
+          unzip android-ndk-r27c-linux.zip -d $HOME
+
+      # Verify NDK setup
+      - name: Verify Android NDK Path
+        run: |
+          export ANDROID_NDK_HOME=$HOME/android-ndk-r27c
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
+          ls $ANDROID_NDK_HOME/build/cmake
+
+      # Cache CMake build directory
+      - name: Cache CMake build
+        uses: actions/cache@v3
+        with:
+          path: build
+          key: build-cache-${{ runner.os }}-${{ hashFiles('CMakeLists.txt') }}
+          restore-keys: |
+            build-cache-${{ runner.os }}-
+
+      # Build the Zygisk module for arm64-v8a
+      - name: Build Zygisk Module for arm64-v8a
+        run: |
+          export ANDROID_NDK_HOME=$HOME/android-ndk-r27c
+          cmake -G Ninja \
+                -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
+                -DANDROID_ABI=arm64-v8a \
+                -DANDROID_PLATFORM=android-34 \
+                -DCMAKE_BUILD_TYPE=Release \
+                -Bbuild -H.
+          cmake --build build --target KTASTOPAPP
+          mv build/libKTASTOPAPP.so arm64-v8a.so
+
+      # Build the Zygisk module for armeabi-v7a
+      - name: Build Zygisk Module for armeabi-v7a
+        run: |
+          export ANDROID_NDK_HOME=$HOME/android-ndk-r27c
+          cmake -G Ninja \
+                -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
+                -DANDROID_ABI=armeabi-v7a \
+                -DANDROID_PLATFORM=android-34 \
+                -DCMAKE_BUILD_TYPE=Release \
+                -Bbuild -H.
+          cmake --build build --target KTASTOPAPP
+          mv build/libKTASTOPAPP.so armeabi-v7a.so
+
+      # Store outputs
+      - name: Upload built libraries
+        uses: actions/upload-artifact@v3
+        with:
+          name: zygisk-modules
+          path: |
+            arm64-v8a.so
+            armeabi-v7a.so
