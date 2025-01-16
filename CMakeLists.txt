@@ -1,0 +1,59 @@
+include_directories(${CMAKE_SOURCE_DIR}/external)
+
+cmake_minimum_required(VERSION 3.22.1)
+
+# Đặt tên dự án
+project(KTAify)
+
+# Sử dụng chuẩn C++23
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Đầu ra của thư viện sẽ được đặt trong thư mục build
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+
+# Đặt các cờ biên dịch
+set(C_FLAGS "-Werror=format -fdata-sections -ffunction-sections")
+set(CXX_FLAGS "-Werror=format -fdata-sections -ffunction-sections -fno-exceptions -fno-rtti")
+
+# Cấu hình tối ưu hóa cho chế độ Release
+if (CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(C_FLAGS "${C_FLAGS} -O2 -fvisibility=hidden -fvisibility-inlines-hidden")
+else ()
+    set(C_FLAGS "${C_FLAGS} -O0")
+endif ()
+
+# Thêm cờ biên dịch vào CMake
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${C_FLAGS}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${C_FLAGS} ${CXX_FLAGS}")
+
+# Đặt cờ liên kết
+set(LINKER_FLAGS "-ffixed-x18 -Wl,--hash-style=both")
+if (CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(LINKER_FLAGS "${LINKER_FLAGS} -Wl,-exclude-libs,ALL -Wl,--gc-sections -Wl,--strip-all")
+endif ()
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${LINKER_FLAGS}")
+
+# Thêm thư viện chính cho module KTAify
+add_library(KTAify SHARED
+            KTAify.cpp
+            module.h
+            embedded_config.h)
+
+# Liên kết thư viện Android log
+target_link_libraries(KTAify log)
+
+# Strip symbols trong chế độ Release
+if (CMAKE_BUILD_TYPE STREQUAL "Release")
+    add_custom_command(TARGET KTAify POST_BUILD
+            COMMAND ${CMAKE_STRIP} --strip-all --remove-section=.comment "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libKTAify.so"
+            COMMENT "Stripping symbols from KTAify")
+endif ()
+
+# Hỗ trợ armeabi-v7a và arm64-v8a
+set_target_properties(KTAify PROPERTIES
+    OUTPUT_NAME "KTAify"
+    ANDROID_ABI "arm64-v8a;armeabi-v7a"
+)
+# Bật exceptions riêng cho KTAify.cpp
+set_source_files_properties(${CMAKE_SOURCE_DIR}/KTAify.cpp PROPERTIES COMPILE_FLAGS "-fexceptions")
